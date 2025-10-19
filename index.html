@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cricket Social – Proof of Concept</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+        Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+      background-color: #f2f2f2;
+    }
+    #app {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      margin-bottom: 20px;
+    }
+    .match-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .match-card {
+      background-color: #fff;
+      padding: 12px 16px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: box-shadow 0.15s ease, transform 0.15s ease;
+      flex: 1 1 200px;
+      box-sizing: border-box;
+    }
+    .match-card:hover {
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+      transform: translateY(-2px);
+    }
+    .match-card h3 {
+      margin: 0 0 4px;
+      font-size: 16px;
+    }
+    .match-card .status {
+      font-size: 12px;
+      color: #666;
+    }
+    .thread-nav {
+      margin-bottom: 10px;
+    }
+    .thread-nav button {
+      background-color: #e0e0e0;
+      border: none;
+      border-radius: 3px;
+      padding: 6px 12px;
+      margin-right: 6px;
+      cursor: pointer;
+    }
+    .thread-nav button.active {
+      background-color: #007bff;
+      color: #fff;
+    }
+    .comments {
+      background-color: #fff;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 16px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .comment {
+      border-bottom: 1px solid #f0f0f0;
+      padding: 8px 0;
+    }
+    .comment:last-child {
+      border-bottom: none;
+    }
+    .comment .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+    .comment .author {
+      font-weight: 600;
+    }
+    .comment .timestamp {
+      font-size: 11px;
+      color: #888;
+    }
+    .comment .body {
+      font-size: 14px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .comment-form {
+      margin-top: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .comment-form textarea {
+      resize: vertical;
+      min-height: 60px;
+      padding: 8px;
+      font-size: 14px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    .comment-form button {
+      align-self: flex-end;
+      background-color: #28a745;
+      border: none;
+      color: white;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .comment-form button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .notice {
+      font-size: 13px;
+      color: #555;
+      margin-top: 6px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <h1>Cricket Social POC</h1>
+    <div class="match-list">
+      <!-- List of matches -->
+      <div
+        v-for="match in matches"
+        :key="match.id"
+        class="match-card"
+        @click="selectMatch(match)"
+      >
+        <h3>{{ match.title }}</h3>
+        <div class="status">{{ match.status }}</div>
+      </div>
+    </div>
+    <div v-if="selectedMatch">
+      <h2>{{ selectedMatch.title }}</h2>
+      <p style="color: #666; margin-top: -10px; margin-bottom: 16px">
+        Select a thread to view or participate in discussions.
+      </p>
+      <div class="thread-nav">
+        <button
+          v-for="threadType in threadTypes"
+          :key="threadType"
+          :class="{ active: selectedThread === threadType }"
+          @click="selectThread(threadType)"
+        >
+          {{ capitalize(threadType) }}
+        </button>
+      </div>
+      <div v-if="selectedThread" class="thread-view">
+        <h3>{{ capitalize(selectedThread) }} Thread</h3>
+        <div class="comments">
+          <div
+            v-for="comment in comments[selectedThread]"
+            :key="comment.id"
+            class="comment"
+          >
+            <div class="header">
+              <span class="author">{{ comment.author }}</span>
+              <span class="timestamp">{{ comment.timestamp }}</span>
+            </div>
+            <div class="body">{{ comment.text }}</div>
+          </div>
+          <div v-if="comments[selectedThread].length === 0" style="color: #777">
+            No comments yet. Start the conversation!
+          </div>
+        </div>
+        <!-- Placeholder for LLM integration. A future version of this platform
+             will leverage a large language model to summarise the discussion
+             and surface key sentiments, stats and trivia based on the match
+             context. For now, we simply show a placeholder. -->
+        <div
+          style="margin-top: 8px; font-size: 13px; color: #888; font-style: italic"
+        >
+          AI Summary (coming soon): this area will automatically summarise fan
+          sentiments and key moments once our LLM integration is ready.
+        </div>
+        <div class="comment-form" v-if="allowCommenting(selectedThread)">
+          <textarea v-model="newComment" placeholder="Write your comment..."></textarea>
+          <button @click="postComment" :disabled="newComment.trim() === ''">
+            Post
+          </button>
+          <div class="notice" v-if="isLimitedThread(selectedThread)">
+            You can only post one comment in this thread.
+          </div>
+        </div>
+        <div class="notice" v-else>
+          You have already posted in this thread. Join other threads or view the
+          discussion.
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script>
+    const app = {
+      data() {
+        return {
+          // Example match data. In a real application this would come from
+          // the backend or a live API. For the proof of concept we hardcode a few.
+          matches: [
+            {
+              id: 1,
+              title: 'India vs Australia – 3rd ODI',
+              status: 'Live (Chennai)' ,
+            },
+            {
+              id: 2,
+              title: 'England vs New Zealand – Test',
+              status: 'Starts in 2h',
+            },
+            {
+              id: 3,
+              title: 'Pakistan vs Sri Lanka – T20',
+              status: 'Final – Tomorrow',
+            },
+          ],
+          selectedMatch: null,
+          threadTypes: ['match', 'toss', 'over', 'wicket', 'milestones'],
+          selectedThread: null,
+          currentUser: 'You',
+          // Comments keyed by thread type. Each entry is an array of comments
+          // with properties: id, author, text, timestamp.
+          comments: {
+            match: [
+              {
+                id: 1,
+                author: 'RohitFan99',
+                text: 'What a thrilling game! I can’t believe that catch.\nThis is why I love cricket.',
+                timestamp: '2025-10-19 14:05',
+              },
+              {
+                id: 2,
+                author: 'CricketGuru',
+                text: 'Pitch seems good for batting. Expecting a high score today.',
+                timestamp: '2025-10-19 14:07',
+              },
+            ],
+            toss: [],
+            over: [],
+            wicket: [],
+            milestones: [],
+          },
+          newComment: '',
+          // Track whether the current user has already posted in non-match threads
+          postedInThread: {
+            toss: false,
+            over: false,
+            wicket: false,
+            milestones: false,
+          },
+        };
+      },
+      methods: {
+        selectMatch(match) {
+          this.selectedMatch = match;
+          this.selectedThread = 'match';
+          this.newComment = '';
+        },
+        selectThread(thread) {
+          this.selectedThread = thread;
+          this.newComment = '';
+        },
+        capitalize(word) {
+          return word.charAt(0).toUpperCase() + word.slice(1);
+        },
+        allowCommenting(thread) {
+          // In match thread, always allow multiple comments
+          if (thread === 'match') return true;
+          // For other threads, allow only if user hasn't posted yet
+          return !this.postedInThread[thread];
+        },
+        isLimitedThread(thread) {
+          // Non-match threads are limited to one comment per user
+          return thread !== 'match';
+        },
+        postComment() {
+          const text = this.newComment.trim();
+          if (!text) return;
+          const now = new Date();
+          const pad = (n) => (n < 10 ? '0' + n : n);
+          const timestamp =
+            now.getFullYear() +
+            '-' +
+            pad(now.getMonth() + 1) +
+            '-' +
+            pad(now.getDate()) +
+            ' ' +
+            pad(now.getHours()) +
+            ':' +
+            pad(now.getMinutes());
+          const newId = this.comments[this.selectedThread].length + 1;
+          this.comments[this.selectedThread].push({
+            id: newId,
+            author: this.currentUser,
+            text,
+            timestamp,
+          });
+          // Reset input
+          this.newComment = '';
+          // Mark as posted if limited thread
+          if (this.selectedThread !== 'match') {
+            this.postedInThread[this.selectedThread] = true;
+          }
+        },
+      },
+    };
+    Vue.createApp(app).mount('#app');
+  </script>
+</body>
+</html>
